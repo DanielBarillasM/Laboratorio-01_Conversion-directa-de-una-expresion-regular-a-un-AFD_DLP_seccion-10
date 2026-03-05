@@ -1,8 +1,11 @@
 # **Conversión directa de una expresión regular a un AFD**
 
 **Fecha de entrega:** jueves 12 de marzo de 2026
+
 **Horario:** 19:00 horas
+
 **Modalidad** en grupos (máximo: tres personas)
+
 **Ponderación:** 10 puntos
 
 #### **Introducción**
