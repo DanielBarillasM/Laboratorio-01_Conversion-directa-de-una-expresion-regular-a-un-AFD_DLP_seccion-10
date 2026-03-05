@@ -56,9 +56,12 @@ convertir una expresión regular en un AFD y simular el funcionamiento del autó
 
 1. La ejecución del programa.
 2. El ingreso de tres expresiones regulares distintas y para cada una de estas se deberá:
+   
    a. Mostrar la tabla de transición de estados del AFD resultante.
+
    b. Ingresar y validar una cadena que sí pertenezca al lenguaje asociado a la
    expresión regular.
+
    c. Ingresar y validar una cadena que no pertenezca al lenguaje asociado a la
    expresión regular.
 
