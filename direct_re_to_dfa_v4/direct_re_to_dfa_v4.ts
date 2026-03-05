@@ -158,7 +158,7 @@ function validateInputRegex(userRegex: string) {
   if (!userRegex.trim()) throw new Error("La expresión regular está vacía.");
   if (userRegex.length > LIMITS.MAX_REGEX_CHARS) throw new Error(`Regex demasiado larga (>${LIMITS.MAX_REGEX_CHARS}).`);
 
-  const forbidden = "+?{}[].^$";
+  const forbidden = "{}[].^$";
   for (let i = 0; i < userRegex.length; i++) {
     const ch = userRegex[i];
 
@@ -178,7 +178,7 @@ function validateInputRegex(userRegex: string) {
       // si el usuario quiere estos como literal, debe escaparlos: \+
       for (let j = 0; j < forbidden.length; j++) {
         if (ch === forbidden[j]) {
-          throw new Error(`Operador no soportado: '${ch}'. Solo se permite | * ( ) concatenación y ε. Si lo quieres literal, escápalo con \\.`);
+          throw new Error(`Operador no soportado: '${ch}'. Solo se permite | * + ? ( ) concatenación y ε. Si lo quieres literal, escápalo con \\.`);
         }
       }
     }
@@ -190,7 +190,7 @@ function validateInputRegex(userRegex: string) {
 // ----------------------------
 type Tok =
   | { t: "sym"; v: string } // símbolo del alfabeto, ε o #
-  | { t: "op"; v: "|" | "·" | "*" }
+  | { t: "op"; v: "|" | "·" | "*" | "+" | "?" }
   | { t: "lp" }
   | { t: "rp" };
 
@@ -210,6 +210,8 @@ function tokenize(input: string, startMs: number): Tok[] {
     else if (ch === ")") out.push({ t: "rp" });
     else if (ch === "|") out.push({ t: "op", v: "|" });
     else if (ch === "*") out.push({ t: "op", v: "*" });
+    else if (ch === "+") out.push({ t: "op", v: "+" });
+    else if (ch === "?") out.push({ t: "op", v: "?" });
     else out.push({ t: "sym", v: ch });
 
     if (out.length > LIMITS.MAX_TOKENS) throw new Error(`Demasiados tokens (>${LIMITS.MAX_TOKENS}).`);
@@ -219,7 +221,7 @@ function tokenize(input: string, startMs: number): Tok[] {
 
 function isConcatNeeded(a: Tok | null, b: Tok | null): boolean {
   if (!a || !b) return false;
-  const aCanEnd = a.t === "sym" || a.t === "rp" || (a.t === "op" && a.v === "*");
+  const aCanEnd = a.t === "sym" || a.t === "rp" || (a.t === "op" && (a.v === "*" || a.v === "+" || a.v === "?"));
   const bCanStart = b.t === "sym" || b.t === "lp";
   return aCanEnd && bCanStart;
 }
@@ -240,8 +242,8 @@ function insertExplicitConcat(tokens: Tok[], startMs: number): Tok[] {
 // ----------------------------
 // 2) Infix -> Postfix (Shunting-yard)
 // ----------------------------
-function precedence(op: "|" | "·" | "*"): number {
-  if (op === "*") return 3;
+function precedence(op: "|" | "·" | "*" | "+" | "?"): number {
+  if (op === "*" || op === "+" || op === "?") return 3;
   if (op === "·") return 2;
   return 1;
 }
@@ -302,6 +304,44 @@ function nid(): number {
   return NODE_ID;
 }
 
+
+function cloneSubtree(orig: Node, startMs: number): Node {
+  // Clonado profundo SIN recursión (evita stack overflow).
+  // Importante para r+ ≡ r · r* (se requiere duplicar posiciones).
+  const map = new Map<any, Node>();
+  const stack: Array<{ n: Node; seen: boolean }> = [{ n: orig, seen: false }];
+
+  while (stack.length) {
+    assertBudget(startMs, "cloneSubtree");
+    const cur = stack.pop() as { n: Node; seen: boolean };
+    const n = cur.n;
+
+    if (!cur.seen) {
+      stack.push({ n, seen: true });
+      if (n.k === "star") stack.push({ n: n.c, seen: false });
+      else if (n.k === "concat" || n.k === "or") {
+        stack.push({ n: n.r, seen: false });
+        stack.push({ n: n.l, seen: false });
+      }
+      continue;
+    }
+
+    let c: Node;
+    if (n.k === "leaf") {
+      c = { id: nid(), k: "leaf", sym: n.sym };
+    } else if (n.k === "star") {
+      c = { id: nid(), k: "star", c: map.get(n.c) as Node };
+    } else if (n.k === "concat") {
+      c = { id: nid(), k: "concat", l: map.get(n.l) as Node, r: map.get(n.r) as Node };
+    } else {
+      c = { id: nid(), k: "or", l: map.get(n.l) as Node, r: map.get(n.r) as Node };
+    }
+    map.set(n, c);
+  }
+
+  return map.get(orig) as Node;
+}
+
 function buildSyntaxTree(postfix: Tok[], startMs: number): Node {
   const st: Node[] = [];
 
@@ -314,10 +354,22 @@ function buildSyntaxTree(postfix: Tok[], startMs: number): Node {
     }
     if (tok.t !== "op") continue;
 
-    if (tok.v === "*") {
+    if (tok.v === "*" || tok.v === "+" || tok.v === "?") {
       const a = st.pop();
-      if (!a) throw new Error("Operador '*' sin operando.");
-      st.push({ id: nid(), k: "star", c: a });
+      if (!a) throw new Error(`Operador '${tok.v}' sin operando.`);
+
+      if (tok.v === "*") {
+        st.push({ id: nid(), k: "star", c: a });
+      } else if (tok.v === "?") {
+        // r? ≡ (r | ε)
+        const eps: Node = { id: nid(), k: "leaf", sym: "ε" };
+        st.push({ id: nid(), k: "or", l: a, r: eps });
+      } else {
+        // r+ ≡ r · r*
+        const a2 = cloneSubtree(a, startMs);
+        const star: Node = { id: nid(), k: "star", c: a2 };
+        st.push({ id: nid(), k: "concat", l: a, r: star });
+      }
       continue;
     }
 
@@ -610,6 +662,9 @@ type Meta = {
   limits: typeof LIMITS;
 };
 
+type DFATestStep = { index: number; symbol: string; from: string; to: string | null; note?: string };
+type DFATestResult = { input: string; accepted: boolean; start: string; end: string; path: DFATestStep[] };
+
 type DFAResult = {
   vizError?: string;
   trees?: {
@@ -631,9 +686,47 @@ type DFAResult = {
   transitions: DFATrans[];
   dot: string;
   svg?: string;
+
   steps: DFASteps;
   meta: Meta;
+
+  // Resultado opcional de simulación
+  test?: DFATestResult;
 };
+
+function simulateDFA(dfa: DFAResult, input: string): DFATestResult {
+  // Construye tabla de transición δ desde la lista de transiciones
+  const delta = new Map<string, Map<string, string>>();
+  for (const t of dfa.transitions) {
+    let row = delta.get(t.from);
+    if (!row) {
+      row = new Map<string, string>();
+      delta.set(t.from, row);
+    }
+    row.set(t.via, t.to);
+  }
+
+  const accept = new Set<string>();
+  for (const st of dfa.states) if (st.isAccept) accept.add(st.id);
+
+  let cur = dfa.startId;
+  const path: DFATestStep[] = [];
+
+  for (let i = 0; i < input.length; i++) {
+    const sym = input[i];
+    const row = delta.get(cur);
+    const nxt = row ? row.get(sym) : undefined;
+    if (!nxt) {
+      path.push({ index: i, symbol: sym, from: cur, to: null, note: "Sin transición para este símbolo" });
+      return { input, accepted: false, start: dfa.startId, end: cur, path };
+    }
+    path.push({ index: i, symbol: sym, from: cur, to: nxt });
+    cur = nxt;
+  }
+
+  return { input, accepted: accept.has(cur), start: dfa.startId, end: cur, path };
+}
+
 
 function buildDot(states: DFAState[], transitions: DFATrans[], startId: string): string {
   let out = "digraph DFA {\n";
@@ -1084,6 +1177,19 @@ function renderSSRPage(dfa: DFAResult, svg: string | null, warnNoViz: boolean, v
     treesHtml += "<details><summary><b>Árbol all</b></summary>" + wrapSvgOrDot(dfa.trees.allSvg, dfa.trees.allDot) + "</details>";
   }
 
+
+  let simHtml = "";
+  if (dfa.test) {
+    const ok = dfa.test.accepted;
+    simHtml += "<div style='margin:6px 0;color:" + (ok ? "#1b5e20" : "#b00020") + ";'><b>" + (ok ? "ACEPTADA" : "RECHAZADA") + "</b> | fin=" + htmlEscape(dfa.test.end) + "</div>";
+    simHtml += "<details open><summary>Ver recorrido</summary>";
+    simHtml += "<table><thead><tr><th>i</th><th>sym</th><th>from</th><th>to</th><th>nota</th></tr></thead><tbody>";
+    for (const step of dfa.test.path) {
+      simHtml += "<tr><td>" + step.index + "</td><td>" + htmlEscape(step.symbol) + "</td><td>" + htmlEscape(step.from) + "</td><td>" + (step.to ? htmlEscape(step.to) : "∅") + "</td><td>" + htmlEscape(step.note || "") + "</td></tr>";
+    }
+    simHtml += "</tbody></table></details>";
+  }
+
   const svgBlock = svg ? svg : "<pre style='background:#f6f6f6;padding:10px;overflow:auto;'>" + htmlEscape(dfa.dot) + "</pre>";
 
   const warning = warnNoViz
@@ -1122,6 +1228,7 @@ function renderSSRPage(dfa: DFAResult, svg: string | null, warnNoViz: boolean, v
     "<div class='meta'><b>" + htmlEscape(metaLine) + "</b></div>" +
     warning +
     "<h3>Diagrama AFD</h3><div class='svgWrap'>" + svgBlock + "</div>" +
+    "<h3>Simulación de cadena</h3>" + (simHtml || "<div class='hint'>Usa /render?re=...&s=CADENA para simular.</div>") +
     "<h3>Árboles del método directo</h3>" + treesHtml +
     "<h3>Paso 1: Expresión aumentada</h3><pre>" + htmlEscape(re) + "</pre>" +
     "<h3>Paso 2: Tokens</h3><pre>" + htmlEscape(tokens) + "</pre>" +
@@ -1166,19 +1273,25 @@ const INDEX_HTML = `<!doctype html>
 <body>
   <h2>Conversión directa: Expresión Regular → AFD</h2>
   <div class="hint">
-    Operadores: <b>|</b>, <b>*</b>, <b>( )</b>. Concatenación implícita.<br/>
+    Operadores: <b>|</b>, <b>*</b>, <b>+</b>, <b>?</b>, <b>( )</b>. Concatenación implícita.<br/>
     Epsilon: usa <b>ε</b>. Escape: <b>\\</b> (ej: \\| literal '|').<br/>
     <b>Importante:</b> '#' está reservado (sentinela).<br/>
     SVG backend: <code>npm i viz.js</code>
   </div>
 
   <textarea id="re">(a|b)*abb</textarea><br/>
+  <label><b>Cadena a evaluar:</b></label><br/>
+  <input id="str" value="abb" style="width:100%;padding:6px;margin:6px 0" />
   <button id="run">Convertir</button>
   <div id="status"></div>
   <div id="meta" class="meta"></div>
 
   <h3>Diagrama AFD</h3>
   <div id="svgBox" class="svgWrap"></div>
+
+  <h3>Simulación de cadena</h3>
+  <div id="simBox"></div>
+  <details><summary>Ver recorrido</summary><div id="simPath"></div></details>
 
   <h3>Árboles del método directo</h3>
   <div id="treesBox"></div>
@@ -1309,6 +1422,7 @@ const INDEX_HTML = `<!doctype html>
 
   async function run(){
     const re=document.getElementById("re").value;
+    const s=document.getElementById("str").value;
     const status=document.getElementById("status");
     const meta=document.getElementById("meta");
     status.className="";
@@ -1318,7 +1432,7 @@ const INDEX_HTML = `<!doctype html>
     const resp=await fetch("/api/convert",{
       method:"POST",
       headers:{ "content-type":"application/json" },
-      body: JSON.stringify({ regex: re })
+      body: JSON.stringify({ regex: re, input: s })
     });
     const data=await resp.json();
     if(!resp.ok){
@@ -1346,6 +1460,28 @@ const INDEX_HTML = `<!doctype html>
     }
 
     document.getElementById("treesBox").innerHTML = renderTrees(data.trees);
+
+    // Simulación (si viene test)
+    const simBox = document.getElementById("simBox");
+    const simPath = document.getElementById("simPath");
+    if (data.test && typeof data.test === "object") {
+      const ok = !!data.test.accepted;
+      simBox.innerHTML =
+        "<div class='" + (ok ? "ok" : "err") + "'><b>" +
+        (ok ? "ACEPTADA" : "RECHAZADA") +
+        "</b> | fin=" + esc(String(data.test.end)) + "</div>";
+      // recorrido como tabla
+      let t = "<table><thead><tr><th>i</th><th>sym</th><th>from</th><th>to</th><th>nota</th></tr></thead><tbody>";
+      const path = data.test.path || [];
+      for (const step of path) {
+        t += "<tr><td>" + step.index + "</td><td>" + esc(step.symbol) + "</td><td>" + esc(step.from) + "</td><td>" + (step.to ? esc(step.to) : "∅") + "</td><td>" + esc(step.note || "") + "</td></tr>";
+      }
+      t += "</tbody></table>";
+      simPath.innerHTML = t;
+    } else {
+      simBox.innerHTML = "<div class='hint'>Envía una cadena para simular (usa el input arriba).</div>";
+      simPath.innerHTML = "";
+    }
 
     document.getElementById("aug").textContent = data.steps.step1_augmented;
     document.getElementById("toks").textContent = data.steps.step2_tokens.join(" ");
@@ -1398,6 +1534,14 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
         res.end("Error: " + String(e?.message || e));
         return;
+      }
+
+      // Simulación opcional por query param: ?s=CADENA (o ?input=CADENA)
+      const sParam = u.searchParams.get("s");
+      const sParam2 = u.searchParams.get("input");
+      const simStr = (sParam !== null ? sParam : sParam2);
+      if (simStr !== null) {
+        try { dfa.test = simulateDFA(dfa, String(simStr)); } catch { /* no throw */ }
       }
 
       const viz = await getVizRenderer();
@@ -1499,6 +1643,11 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      // Simulación opcional: si envías { input: "cadena" } también devuelve accepted/path
+      if (payload && typeof payload.input === "string") {
+        try { dfa.test = simulateDFA(dfa, String(payload.input)); } catch { /* ignore */ }
+      }
+
       const viz = await getVizRenderer();
       if (viz && !dfa.meta.truncated.dotTooLarge) {
         try {
@@ -1536,3 +1685,6 @@ server.listen(PORT, () => {
   console.log("Servidor listo: http://localhost:" + PORT);
   console.log("SSR sin frontend: http://localhost:" + PORT + "/render?re=(a|b)*abb");
 });
+
+console.log('BOOT OK');
+
