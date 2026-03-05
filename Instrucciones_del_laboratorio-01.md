@@ -25,7 +25,7 @@ siguiendo las transiciones correspondientes. Si al finalizar la lectura de la ca
 se encuentra en un estado de aceptación, se concluye que la cadena pertenece al lenguaje;
 de lo contrario, se concluye que la cadena no pertenece al lenguaje.
 
-#### **Objetivos
+#### **Objetivos**
 
 **Objetivo general**
 
