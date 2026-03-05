@@ -362,6 +362,30 @@ Ejemplo con caracteres “raros” como símbolos (válido):
 
 ---
 
+## Ejemplos para probar más específicos
+
+Aquí hay 3 ejemplos que cubren todos los operadores:
+
+1. Usa `|` y `*` y concatenación:
+
+* Regex: `(a|b)*abb`
+* Cadena SÍ: `abb`
+* Cadena NO: `ab`
+
+2. Usa `+` (cerradura positiva) y concatenación:
+
+* Regex: `a+b`
+* Cadena SÍ: `aaab`
+* Cadena NO: `b`
+
+1. Usa `?` (opcional) y concatenación:
+
+* Regex: `a?b`
+* Cadena SÍ: `b`  (porque `a` es opcional)
+* Cadena NO: `aaab`
+
+---
+
 ## Errores comunes y cómo arreglarlos
 
 ### 1) “No hay SVG / Instala viz.js”
