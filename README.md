@@ -378,7 +378,7 @@ Aquí hay 3 ejemplos que cubren todos los operadores:
 * Cadena SÍ: `aaab`
 * Cadena NO: `b`
 
-1. Usa `?` (opcional) y concatenación:
+3. Usa `?` (opcional) y concatenación:
 
 * Regex: `a?b`
 * Cadena SÍ: `b`  (porque `a` es opcional)
