@@ -1,4 +1,4 @@
-# **Conversión directa de una expresión regular a un AFD**
+# **Conversión directa de una expresión regular a un AFD y simulación del AFD**
 
 **Fecha de entrega:** jueves 12 de marzo de 2026
 
@@ -72,6 +72,7 @@ convertir una expresión regular en un AFD y simular el funcionamiento del autó
 
 - La actividad deberá realizarse en los grupos que se conformaron al principio del
 semestre.
+- El lenguaje de programación a utilizar queda a elección del grupo.
 - No es indispensable desarrollar una interfaz gráfica y el programa puede ejecutarse
 desde consola, pero si un grupo desea utilizar una interfaz gráfica, puede hacerlo.
 - Las expresiones regulares podrán incluir los operadores: unión (|), concatenación
@@ -82,3 +83,11 @@ utilice todos los operadores, pero cada operador deberá aparecer al menos una v
 alguna de las tres expresiones.
 - El video no debe exceder cinco minutos de duración.
 - El uso de librerías para expresiones regulares está estrictamente prohibido. El incumplimiento de esta restricción se penalizará colocando 0 puntos de nota.
+
+#### **Rúbrica de evaluación**
+
+| Criterio                                                                                      | Excelente (100%)                                                                                        | Bueno (66%)                                                                                 | Regular (33%)                                                                                         | Deficiente (0%)                                                                                               |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **1. Implementación del método directo y generación de tabla de transición de estados (60%)** | Las tres tablas de transición de estados son correctas y se utilizaron todos los operadores requeridos. | Dos tablas de transición de estados son correctas o no se utilizó algún operador requerido. | Solo una tabla de transición es correcta o no se utilizaron dos operadores requeridos.                | Las tres tablas de transición de estados son incorrectas o no se utilizaron tres o más operadores requeridos. |
+| **2. Validación de cadenas de entrada (30%)**                                                 | Las seis cadenas de prueba fueron validadas correctamente.                                              | Cuatro cadenas fueron validadas correctamente.                                              | Dos cadenas fueron validadas correctamente.                                                           | Menos de dos cadenas fueron validadas correctamente.                                                          |
+| **3. Calidad de la explicación en el video (10%)**                                            | La explicación del video es estructurada, clara y concisa.                                              | La explicación es clara y ordenada, aunque con menor fluidez.                               | La explicación es monótona, desorganizada, difícil de seguir o transmite el contenido con dificultad. | La explicación es desordenada, confusa o incompleta.                                                          |
