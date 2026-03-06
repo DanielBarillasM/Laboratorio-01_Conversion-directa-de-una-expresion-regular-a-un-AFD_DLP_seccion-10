@@ -30,14 +30,18 @@ Este módulo implementa la **conversión directa de una expresión regular a un 
 * Construye árbol sintáctico desde postfix
 * Calcula **nullable**, **firstpos**, **lastpos**
 * Calcula **followpos**
+  
 * Construye el AFD por conjuntos de posiciones:
 
   * **estado inicial** = firstpos(raíz)
   * δ(S,a) = ⋃ followpos(p) para p∈S con símbolo(p)=a
   * **estados de aceptación**: los que contienen la posición de **#**
+  * CABE RESALTAR QUE EL AFD ESTÁ MINÍMIZADO COMO UN EXTRA.
+
 * Grafica desde el backend:
 
   * **DOT → SVG** usando **viz.js** (solo visualización; no se usan librerías de regex)
+  
 * **Simula el AFD** para validar si una **cadena pertenece o no**:
 
   * Input “**Cadena a evaluar**”
